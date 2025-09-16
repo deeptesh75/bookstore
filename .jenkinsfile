@@ -1,53 +1,48 @@
- pipeline {
+pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_CREDENTIALS = credentials('docker-hub-credentials-id')
-        IMAGE_NAME = "deepteshsingh/bookstore"
-        DOCKER_PATH = "/usr/local/bin/docker"  // Path to Docker on macOS
+        // Path to Maven wrapper
+        MVNW = './mvnw'
+        IMAGE_NAME = 'deepteshsingh/bookstore'
+        IMAGE_TAG = 'latest'
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout SCM') {
             steps {
                 git branch: 'deeptesh75',
-                    url: 'https://github.com/deeptesh75/bookstore.git'
+                    url: 'https://github.com/deeptesh75/bookstore.git',
+                    credentialsId: 'docker-hub-credentials-id'
             }
         }
 
         stage('Build JAR') {
             steps {
-                // Make mvnw executable
-                sh 'chmod +x mvnw'
-                sh './mvnw clean package -DskipTests'
+                sh "chmod +x ${MVNW}"
+                sh "${MVNW} clean package -DskipTests"
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build Docker image using full Docker path
-                    sh "${DOCKER_PATH} build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
+                    // Login will happen in the next stage
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-credentials-id',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        // Login to Docker Hub
-                        sh "${DOCKER_PATH} login -u $DOCKER_USER -p $DOCKER_PASS"
-                        
-                        // Push Docker images
-                        sh "${DOCKER_PATH} push ${IMAGE_NAME}:${BUILD_NUMBER}"
-                        sh "${DOCKER_PATH} tag ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}:latest"
-                        sh "${DOCKER_PATH} push ${IMAGE_NAME}:latest"
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-credentials-id',
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
@@ -55,10 +50,10 @@
 
     post {
         success {
-            echo "✅ Build and Docker Push successful!"
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Build failed!"
+            echo "❌ Pipeline failed!"
         }
     }
 }
