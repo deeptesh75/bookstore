@@ -1,48 +1,49 @@
-pipeline {
+ pipeline {
     agent any
 
     environment {
-        // Path to Maven wrapper
-        MVNW = './mvnw'
+        // Full path to docker binary on macOS
+        DOCKER = '/usr/local/bin/docker'
+
+        // Docker Hub credentials stored in Jenkins
+        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials-id'
+
+        // Docker image info
         IMAGE_NAME = 'deepteshsingh/bookstore'
         IMAGE_TAG = 'latest'
     }
 
     stages {
-
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
-                git branch: 'deeptesh75',
-                    url: 'https://github.com/deeptesh75/bookstore.git',
-                    credentialsId: 'docker-hub-credentials-id'
+                git branch: 'deeptesh75', url: 'https://github.com/deeptesh75/bookstore.git', credentialsId: "${DOCKER_HUB_CREDENTIALS}"
             }
         }
 
         stage('Build JAR') {
             steps {
-                sh "chmod +x ${MVNW}"
-                sh "${MVNW} clean package -DskipTests"
+                sh 'chmod +x ./mvnw'
+                sh './mvnw clean package -DskipTests'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Login will happen in the next stage
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh "${DOCKER} build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'docker-hub-credentials-id',
-                    usernameVariable: 'DOCKER_USERNAME',
-                    passwordVariable: 'DOCKER_PASSWORD'
-                )]) {
-                    sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDENTIALS}", 
+                                                  passwordVariable: 'DOCKER_PSW', 
+                                                  usernameVariable: 'DOCKER_USER')]) {
+                    script {
+                        sh "${DOCKER} login -u $DOCKER_USER -p $DOCKER_PSW"
+                        sh "${DOCKER} push ${IMAGE_NAME}:${IMAGE_TAG}"
+                    }
                 }
             }
         }
@@ -50,10 +51,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline completed successfully!"
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo "❌ Pipeline failed!"
+            echo '❌ Pipeline failed!'
         }
     }
 }
