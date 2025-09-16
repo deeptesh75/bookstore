@@ -2,21 +2,19 @@
     agent any
 
     environment {
-        // Full path to docker binary on macOS
-        DOCKER = '/usr/local/bin/docker'
-
         // Docker Hub credentials stored in Jenkins
-        DOCKER_HUB_CREDENTIALS = 'docker-hub-credentials-id'
-
-        // Docker image info
-        IMAGE_NAME = 'deepteshsingh/bookstore'
-        IMAGE_TAG = 'latest'
+        DOCKER_HUB_CREDENTIALS = credentials('docker-hub-credentials-id')
+        IMAGE_NAME = "deepteshsingh/bookstore"
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                git branch: 'deeptesh75', url: 'https://github.com/deeptesh75/bookstore.git', credentialsId: "${DOCKER_HUB_CREDENTIALS}"
+                git(
+                    url: 'https://github.com/deeptesh75/bookstore.git',
+                    branch: 'deeptesh75',
+                    credentialsId: 'docker-hub-credentials-id'
+                )
             }
         }
 
@@ -27,34 +25,37 @@
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Docker Login') {
             steps {
-                script {
-                    sh "${DOCKER} build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                }
+                sh "docker login -u ${DOCKER_HUB_CREDENTIALS_USR} -p ${DOCKER_HUB_CREDENTIALS_PSW}"
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Build Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDENTIALS}", 
-                                                  passwordVariable: 'DOCKER_PSW', 
-                                                  usernameVariable: 'DOCKER_USER')]) {
-                    script {
-                        sh "${DOCKER} login -u $DOCKER_USER -p $DOCKER_PSW"
-                        sh "${DOCKER} push ${IMAGE_NAME}:${IMAGE_TAG}"
-                    }
+                script {
+                    // Use Git commit hash for image tagging
+                    def commitHash = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.DOCKER_TAG = "${commitHash}"
                 }
+                sh "docker build -t ${IMAGE_NAME}:${DOCKER_TAG} -t ${IMAGE_NAME}:latest ."
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh "docker push ${IMAGE_NAME}:${DOCKER_TAG}"
+                sh "docker push ${IMAGE_NAME}:latest"
             }
         }
     }
 
     post {
         success {
-            echo '✅ Pipeline completed successfully!'
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo '❌ Pipeline failed!'
+            echo "❌ Pipeline failed!"
         }
     }
 }
