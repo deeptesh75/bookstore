@@ -2,19 +2,15 @@
     agent any
 
     environment {
-        // Docker Hub credentials stored in Jenkins
-        DOCKER_HUB_CREDENTIALS = credentials('docker-hub-credentials-id')
-        IMAGE_NAME = "deepteshsingh/bookstore"
+        PATH+EXTRA = "/usr/local/bin"
     }
 
     stages {
         stage('Checkout SCM') {
             steps {
-                git(
+                git branch: 'deeptesh75', 
                     url: 'https://github.com/deeptesh75/bookstore.git',
-                    branch: 'deeptesh75',
                     credentialsId: 'docker-hub-credentials-id'
-                )
             }
         }
 
@@ -27,35 +23,42 @@
 
         stage('Docker Login') {
             steps {
-                sh "docker login -u ${DOCKER_HUB_CREDENTIALS_USR} -p ${DOCKER_HUB_CREDENTIALS_PSW}"
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-credentials-id',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Use Git commit hash for image tagging
-                    def commitHash = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.DOCKER_TAG = "${commitHash}"
+                    // Get Git short commit hash for versioned tagging
+                    COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    IMAGE_TAG = "deepteshsingh/bookstore:${COMMIT_HASH}"
+                    sh "docker build -t ${IMAGE_TAG} ."
                 }
-                sh "docker build -t ${IMAGE_NAME}:${DOCKER_TAG} -t ${IMAGE_NAME}:latest ."
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                sh "docker push ${IMAGE_NAME}:${DOCKER_TAG}"
-                sh "docker push ${IMAGE_NAME}:latest"
+                script {
+                    sh "docker push ${IMAGE_TAG}"
+                }
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline completed successfully!"
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo "❌ Pipeline failed!"
+            echo '❌ Pipeline failed!'
         }
     }
 }
