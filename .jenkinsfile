@@ -1,8 +1,8 @@
- pipeline {
+pipeline {
     agent any
 
     environment {
-        PATH+EXTRA = "/usr/local/bin"
+        PATH = "/usr/local/bin:${env.PATH}"
     }
 
     stages {
@@ -37,9 +37,9 @@
             steps {
                 script {
                     // Get Git short commit hash for versioned tagging
-                    COMMIT_HASH = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    IMAGE_TAG = "deepteshsingh/bookstore:${COMMIT_HASH}"
-                    sh "docker build -t ${IMAGE_TAG} ."
+                    def commitHash = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    def imageTag = "deepteshsingh/bookstore:${commitHash}"
+                    sh "docker build -t ${imageTag} ."
                 }
             }
         }
@@ -47,7 +47,7 @@
         stage('Push Docker Image') {
             steps {
                 script {
-                    sh "docker push ${IMAGE_TAG}"
+                    sh "docker push ${imageTag}"
                 }
             }
         }
